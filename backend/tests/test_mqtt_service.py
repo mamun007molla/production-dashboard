@@ -158,3 +158,23 @@ def test_missing_challenge_id_is_rejected():
     assert response["challenge_id"] is None
     assert response["error"] == "challenge_id is required"
     db.scalar.assert_not_called()
+
+
+def test_challenge_response_includes_rejected_submissions_metric():
+    summary = {
+        "net_total": 10,
+        "processed_events": 2,
+        "pending_ack": 1,
+        "unresolved": 0,
+        "duplicates": 1,
+        "conflicts": 0,
+        "rejected_submissions": 3,
+    }
+
+    response = challenge_response(
+        "CH-REJECTED",
+        "COMPLETED",
+        summary=summary,
+    )
+
+    assert response["summary"]["rejected_submissions"] == 3

@@ -136,3 +136,14 @@ The broker is an external dependency, so a working local API does not by itself 
 ## Status
 
 Backend health, PostgreSQL connectivity, and the existing automated test suite have been checked during development. Verify all REST, frontend, and MQTT integration scenarios before treating the project as submission-ready.
+### Change Request
+
+- COUNT quantity must be an integer between 1 and 500, inclusive.
+- Invalid COUNT quantities are recorded as rejected submission attempts.
+- The summary API includes `rejected_submissions`, calculated from persisted
+  attempts classified as `REJECTED`.
+- Duplicate, conflict, and pending-reference classifications are not included
+  in `rejected_submissions`.
+- The dashboard provides a source ID filter for Summary, Pending, and
+  Exceptions views. Clearing the filter restores all sources.
+- The dashboard displays seven metrics, including Rejected Submissions.
