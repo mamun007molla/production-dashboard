@@ -53,9 +53,8 @@ def parse_expiry(value: Any) -> datetime:
 
 
 def get_summary(db: Session) -> dict[str, int]:
-    """Calculate the six dashboard metrics from persisted data."""
+    """Calculate dashboard metrics from persisted database records."""
     events = list(db.scalars(select(ProductionEvent)).all())
-
     attempts = list(db.scalars(select(SubmissionAttempt)).all())
 
     acknowledged_ids = set(db.scalars(select(Acknowledgement.event_pk)).all())
@@ -78,6 +77,10 @@ def get_summary(db: Session) -> dict[str, int]:
         attempt for attempt in attempts if attempt.classification == "CONFLICT"
     ]
 
+    rejected_attempts = [
+        attempt for attempt in attempts if attempt.classification == "REJECTED"
+    ]
+
     return {
         "net_total": calculate_net_total(events),
         "processed_events": len(accepted_events),
@@ -85,6 +88,7 @@ def get_summary(db: Session) -> dict[str, int]:
         "unresolved": len(unresolved_events),
         "duplicates": len(duplicates),
         "conflicts": len(conflicts),
+        "rejected_submissions": len(rejected_attempts),
     }
 
 
@@ -116,7 +120,6 @@ def process_challenge(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     """Validate, process, persist, and respond to an MQTT challenge."""
-
     challenge_id = payload.get("challenge_id")
 
     if not isinstance(challenge_id, str) or not challenge_id.strip():
@@ -252,8 +255,8 @@ def process_challenge(
     for item in events:
         try:
             event = EventInput.model_validate(item)
-            result = process_event(db, event)
-            results.append(result)
+            event_result = process_event(db, event)
+            results.append(event_result)
 
         except Exception:
             db.rollback()

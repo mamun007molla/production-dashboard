@@ -24,6 +24,11 @@ const metrics = [
   { key: "unresolved", label: "Unresolved", icon: "⚠" },
   { key: "duplicates", label: "Duplicates", icon: "⧉" },
   { key: "conflicts", label: "Conflicts", icon: "⇄" },
+  {
+    key: "rejected_submissions",
+    label: "Rejected submissions",
+    icon: "⊘",
+  },
 ];
 
 export default function Home() {
@@ -31,17 +36,33 @@ export default function Home() {
   const [view, setView] = useState("summary");
   const [viewData, setViewData] = useState(null);
   const [jsonInput, setJsonInput] = useState(initialJson);
+  const [sourceInput, setSourceInput] = useState("");
+  const [appliedSource, setAppliedSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const buildStateUrl = useCallback(
+    (selectedView) => {
+      const params = new URLSearchParams({ view: selectedView });
+
+      if (appliedSource.trim()) {
+        params.set("source_id", appliedSource.trim());
+      }
+
+      return `${API_URL}/api/state?${params.toString()}`;
+    },
+    [appliedSource],
+  );
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch(`${API_URL}/api/state?view=summary`);
+      const response = await fetch(buildStateUrl("summary"));
+
       if (!response.ok) {
         throw new Error(`Summary request failed (${response.status})`);
       }
@@ -54,7 +75,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildStateUrl]);
 
   const loadView = useCallback(
     async (selectedView) => {
@@ -68,10 +89,10 @@ export default function Home() {
         return;
       }
 
+      setViewData(null);
+
       try {
-        const response = await fetch(
-          `${API_URL}/api/state?view=${selectedView}`,
-        );
+        const response = await fetch(buildStateUrl(selectedView));
 
         if (!response.ok) {
           throw new Error(`View request failed (${response.status})`);
@@ -83,12 +104,35 @@ export default function Home() {
         setViewData(null);
       }
     },
-    [loadSummary],
+    [buildStateUrl, loadSummary],
   );
 
   useEffect(() => {
     loadSummary();
   }, [loadSummary]);
+
+  async function applySourceFilter(event) {
+    event.preventDefault();
+
+    setAppliedSource(sourceInput.trim());
+    setViewData(null);
+    setMessage("");
+    setError("");
+  }
+
+  async function clearSourceFilter() {
+    setSourceInput("");
+    setAppliedSource("");
+    setViewData(null);
+    setMessage("");
+    setError("");
+  }
+
+  useEffect(() => {
+    if (view !== "summary") {
+      loadView(view);
+    }
+  }, [appliedSource, view, loadView]);
 
   async function submitEvents(event) {
     event.preventDefault();
@@ -98,6 +142,7 @@ export default function Home() {
 
     try {
       const payload = JSON.parse(jsonInput);
+
       const response = await fetch(`${API_URL}/api/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -111,6 +156,7 @@ export default function Home() {
       }
 
       setMessage(JSON.stringify(data, null, 2));
+
       await loadSummary();
 
       if (view !== "summary") {
@@ -144,6 +190,7 @@ export default function Home() {
       }
 
       setMessage(JSON.stringify(data, null, 2));
+
       await loadSummary();
       await loadView("pending");
     } catch (err) {
@@ -168,7 +215,7 @@ export default function Home() {
           </div>
 
           <button
-            onClick={loadSummary}
+            onClick={() => loadView(view)}
             disabled={loading}
             className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
           >
@@ -185,6 +232,50 @@ export default function Home() {
           </div>
         )}
 
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <h2 className="text-lg font-semibold">Production source filter</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Enter a source ID to filter the dashboard, pending events and
+            exceptions. Leave it empty to show all sources.
+          </p>
+
+          <form
+            onSubmit={applySourceFilter}
+            className="mt-4 flex flex-col gap-3 sm:flex-row"
+          >
+            <input
+              type="text"
+              value={sourceInput}
+              onChange={(event) => setSourceInput(event.target.value)}
+              placeholder="e.g. LINE-01"
+              aria-label="Production source ID"
+              className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-cyan-500"
+            />
+
+            <button
+              type="submit"
+              className="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+            >
+              Apply filter
+            </button>
+
+            <button
+              type="button"
+              onClick={clearSourceFilter}
+              className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-medium hover:bg-slate-800"
+            >
+              Clear
+            </button>
+          </form>
+
+          <p className="mt-3 text-xs text-slate-400">
+            Active source:{" "}
+            <span className="font-semibold text-cyan-300">
+              {appliedSource || "All sources"}
+            </span>
+          </p>
+        </section>
+
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {metrics.map((metric) => (
             <article
@@ -197,6 +288,7 @@ export default function Home() {
                   {metric.icon}
                 </span>
               </div>
+
               <p className="mt-4 text-3xl font-bold tabular-nums">
                 {summary ? (summary[metric.key] ?? 0) : "—"}
               </p>
@@ -218,6 +310,7 @@ export default function Home() {
               >
                 Event JSON
               </label>
+
               <textarea
                 id="event-json"
                 value={jsonInput}
@@ -226,6 +319,7 @@ export default function Home() {
                 spellCheck="false"
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 font-mono text-sm leading-6 outline-none focus:border-cyan-500"
               />
+
               <button
                 type="submit"
                 disabled={submitting}
@@ -261,6 +355,9 @@ export default function Home() {
             <div className="mt-5 space-y-3">
               {view === "summary" && (
                 <p className="text-sm text-slate-400">
+                  {appliedSource
+                    ? `Summary filtered for ${appliedSource}.`
+                    : "Showing summary for all production sources."}{" "}
                   Choose Pending or Exceptions to inspect event details.
                 </p>
               )}
@@ -279,6 +376,7 @@ export default function Home() {
                             {item.source_id} · {item.type} · {item.status}
                           </p>
                         </div>
+
                         <button
                           onClick={() =>
                             acknowledge(item.event_id, item.source_id)
@@ -345,6 +443,7 @@ function ExceptionList({ title, items = [] }) {
   return (
     <section className="rounded-xl border border-slate-800 p-4">
       <h3 className="font-medium">{title}</h3>
+
       {items.length === 0 ? (
         <p className="mt-2 text-sm text-slate-500">No items.</p>
       ) : (

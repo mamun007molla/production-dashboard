@@ -74,7 +74,6 @@ def get_state(
 
     if source_id:
         event_query = event_query.where(ProductionEvent.source_id == source_id)
-
         attempt_query = attempt_query.where(SubmissionAttempt.source_id == source_id)
 
     events = list(db.scalars(event_query).all())
@@ -82,7 +81,7 @@ def get_state(
 
     acknowledged_ids = set(db.scalars(select(Acknowledgement.event_pk)).all())
 
-    # Calculate the net production using source-aware event identities.
+    # Calculate net production using source-aware event identities.
     net_total = calculate_net_total(events)
 
     accepted_events = [event for event in events if event.status == "ACCEPTED"]
@@ -103,6 +102,10 @@ def get_state(
         attempt for attempt in attempts if attempt.classification == "CONFLICT"
     ]
 
+    rejected_attempts = [
+        attempt for attempt in attempts if attempt.classification == "REJECTED"
+    ]
+
     summary = {
         "net_total": net_total,
         "processed_events": len(accepted_events),
@@ -110,6 +113,7 @@ def get_state(
         "unresolved": len(unresolved_events),
         "duplicates": len(duplicate_attempts),
         "conflicts": len(conflict_attempts),
+        "rejected_submissions": len(rejected_attempts),
     }
 
     if view == "pending":

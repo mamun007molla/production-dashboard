@@ -74,13 +74,14 @@ def validate_event(event: EventInput) -> None:
     if event.event_time.tzinfo is None or event.event_time.utcoffset() is None:
         raise ValueError("event_time must include a timezone")
 
+
     if event.type == "COUNT":
         if (
             isinstance(event.quantity, bool)
             or not isinstance(event.quantity, int)
-            or event.quantity <= 0
+            or not 1 <= event.quantity <= 500
         ):
-            raise ValueError("COUNT quantity must be a positive integer")
+            raise ValueError("COUNT quantity must be an integer between 1 and 500")
 
         if event.target_event_id is not None:
             raise ValueError("COUNT target_event_id must be null or omitted")
